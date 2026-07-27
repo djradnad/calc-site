@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recipe Calculator</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/glpk.js/4.65/glpk.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -51,8 +52,7 @@
                 
                 <div class="result-tabs">
                     <button class="tab-btn active" data-tab="resources">Raw Resources</button>
-                    <button class="tab-btn" data-tab="recipes">Recipes</button>
-                    <button class="tab-btn" data-tab="items">Item Flow</button>
+                    <button class="tab-btn" data-tab="recipes">Recipe Breakdown</button>
                 </div>
 
                 <div class="tab-content">
@@ -62,9 +62,6 @@
                     <div id="recipes" class="tab">
                         <div id="recipesOutput"></div>
                     </div>
-                    <div id="items" class="tab">
-                        <div id="itemsOutput"></div>
-                    </div>
                 </div>
             </section>
 
@@ -72,10 +69,17 @@
             <section id="errorSection" class="error-section" style="display: none;">
                 <p id="errorMessage"></p>
             </section>
+
+            <!-- Loading Section -->
+            <section id="loadingSection" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Optimizing factory production...</p>
+            </section>
         </main>
     </div>
 
     <script src="calculator.js"></script>
+    <script src="lp-solver.js"></script>
     <script src="ui.js"></script>
 </body>
 </html>

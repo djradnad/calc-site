@@ -1,4 +1,5 @@
 const calculator = new RecipeCalculator();
+const GLPK_AVAILABLE = typeof window.glpk !== 'undefined';
 
 // Resource max limits
 const RESOURCE_MAX_LIMITS = {
@@ -17,11 +18,11 @@ const nuclearPlantsInput = document.getElementById('nuclearPlants');
 const calculateBtn = document.getElementById('calculateBtn');
 const resetBtn = document.getElementById('resetBtn');
 const resultsSection = document.getElementById('resultsSection');
+const loadingSection = document.getElementById('loadingSection');
 const errorSection = document.getElementById('errorSection');
 const errorMessage = document.getElementById('errorMessage');
 const resourcesOutput = document.getElementById('resourcesOutput');
 const recipesOutput = document.getElementById('recipesOutput');
-const itemsOutput = document.getElementById('itemsOutput');
 const tabButtons = document.querySelectorAll('.tab-btn');
 
 function initializeUI() {
@@ -93,14 +94,53 @@ function updateFromUI() {
     });
 }
 
-function handleCalculate() {
+async function handleCalculate() {
     try {
+        if (!GLPK_AVAILABLE) {
+            showError('GLPK library not loaded. Please refresh the page.');
+            return;
+        }
+        
         updateFromUI();
         calculator.calculateResourceProduction();
-        displayResults();
-        resultsSection.style.display = 'block';
+        
+        // Show loading
+        resultsSection.style.display = 'none';
         errorSection.style.display = 'none';
+        loadingSection.style.display = 'block';
+        
+        // Solve LP
+        const rawResList = ['Wood Log', 'Coal', 'Iron Ore', 'Copper Ore', 'Stone', 'Wolframite', 'Uranium Ore'];
+        const nuclearFuelDemand = calculator.numNuclearPlants.toFloat() * 0.5; // 1 fuel cell every 2 minutes
+        
+        // Convert recipes to simple format for LP solver
+        const recipeData = recipesLibrary.map((recipe, idx) => ({
+            name: recipe.name,
+            item: recipe.item,
+            amount: recipe.amount,
+            ingredients: recipe.ingredients.map(ing => [ing[0], ing[1]])
+        }));
+        
+        // Convert resource rates to numbers
+        const resourceRates = {};
+        allResources.forEach(res => {
+            resourceRates[res] = calculator.resourceProductionRates[res].toFloat();
+        });
+        
+        const solver = new LPSolver(recipeData, rawResList, resourceRates, nuclearFuelDemand);
+        const lpResult = await solver.solve();
+        
+        loadingSection.style.display = 'none';
+        
+        if (lpResult.success) {
+            displayResults(lpResult, solver, resourceRates);
+            resultsSection.style.display = 'block';
+            errorSection.style.display = 'none';
+        } else {
+            showError(lpResult.message);
+        }
     } catch (error) {
+        loadingSection.style.display = 'none';
         showError(error.message);
     }
 }
@@ -109,6 +149,7 @@ function handleReset() {
     calculator.setDefaults();
     populateInputs();
     resultsSection.style.display = 'none';
+    loadingSection.style.display = 'none';
     errorSection.style.display = 'none';
 }
 
@@ -116,116 +157,104 @@ function showError(message) {
     errorMessage.textContent = message;
     errorSection.style.display = 'block';
     resultsSection.style.display = 'none';
+    loadingSection.style.display = 'none';
 }
 
-function displayResults() {
-    const results = calculator.getResults();
-    displayResourceResults(results);
-    displayRecipeResults(results);
-    displayItemFlow(results);
+function displayResults(lpResult, solver, resourceRates) {
+    displayRawResourceProduction(lpResult, resourceRates);
+    displayDetailedRecipeBreakdown(lpResult);
 }
 
-function displayResourceResults(results) {
-    let html = '';
-    allResources.forEach(resource => {
-        const production = results.resourceProductionRates[resource];
-        const belts = production.divide(BELT_CAPACITY);
-        const totalNodes = results.nodeCounts[resource];
-
+function displayRawResourceProduction(lpResult, resourceRates) {
+    let html = '<h3>Raw Resource Production (Adjusted to Consumption)</h3>';
+    
+    const rawResList = ['Wood Log', 'Coal', 'Iron Ore', 'Copper Ore', 'Stone', 'Wolframite', 'Uranium Ore'];
+    const beltCapacity = 480;
+    
+    rawResList.forEach(res => {
+        const maxProduction = resourceRates[res] || 0;
+        const actualConsumption = lpResult.resourceConsumption[res] || 0;
+        const belts = maxProduction / beltCapacity;
+        const consumptionBelts = actualConsumption / beltCapacity;
+        
         html += `
             <div class="resource-output">
-                <h4>${resource}</h4>
+                <h4>${res}</h4>
                 <div class="resource-stats">
                     <div class="stat">
-                        <div class="stat-label">Production Rate</div>
-                        <div class="stat-value">${production.toFloat().toFixed(2)}</div>
+                        <div class="stat-label">Max Production Rate</div>
+                        <div class="stat-value">${maxProduction.toFixed(4)}</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-label">Belts Required</div>
-                        <div class="stat-value">${belts.toFloat().toFixed(2)}</div>
+                        <div class="stat-label">Actual Consumption</div>
+                        <div class="stat-value">${actualConsumption.toFixed(4)}</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-label">Total Nodes</div>
-                        <div class="stat-value">${totalNodes.toFloat().toFixed(0)}</div>
+                        <div class="stat-label">Max Belts</div>
+                        <div class="stat-value">${belts.toFixed(2)}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Consumption Belts</div>
+                        <div class="stat-value">${consumptionBelts.toFixed(2)}</div>
                     </div>
                 </div>
             </div>
         `;
     });
+    
     resourcesOutput.innerHTML = html;
 }
 
-function displayRecipeResults(results) {
-    let html = '<h3>Available Recipes</h3>';
+function displayDetailedRecipeBreakdown(lpResult) {
+    let html = '<h3>Detailed Recipe Breakdown</h3>';
+    const beltCapacity = 480;
     
-    recipesLibrary.forEach(recipe => {
-        const time = new Fraction(recipe.time);
-        const itemsPerMin = new Fraction(recipe.amount).divide(time).multiply(60);
-        const tier = ASSUMED_BUILDING_TIERS[recipe.building];
-        const tierMultiplier = BUILDING_TIER_MULTIPLIERS[tier];
-        const capacity = itemsPerMin.multiply(tierMultiplier);
-        const buildingsNeeded = new Fraction(1).divide(capacity);
-
+    const sortedRecipes = Object.entries(lpResult.optimalRecipeRates)
+        .sort((a, b) => b[1] - a[1]);
+    
+    sortedRecipes.forEach(([recipeName, rate]) => {
+        const recipe = recipesLibrary.find(r => r.name === recipeName);
+        if (!recipe) return;
+        
+        const produced = recipe.amount * rate;
+        const prodTime = recipe.time;
+        const building = recipe.building;
+        const beltsProduced = produced / beltCapacity;
+        
         html += `
             <div class="recipe-output">
-                <h4>${recipe.name}</h4>
+                <h4>${recipeName}</h4>
                 <div class="recipe-stats">
                     <div class="stat">
-                        <div class="stat-label">Produces</div>
-                        <div class="stat-value">${recipe.amount} ${recipe.item}</div>
+                        <div class="stat-label">Run Rate (batches/min)</div>
+                        <div class="stat-value">${rate.toFixed(6)}</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-label">Production Time</div>
-                        <div class="stat-value">${recipe.time}s</div>
+                        <div class="stat-label">Total Produced</div>
+                        <div class="stat-value">${produced.toFixed(4)} units/min</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-label">Building</div>
-                        <div class="stat-value">${recipe.building}</div>
+                        <div class="stat-label">Belts for Production</div>
+                        <div class="stat-value">${beltsProduced.toFixed(2)}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Building Used</div>
+                        <div class="stat-value">${building}</div>
                     </div>
                 </div>
                 <div style="margin-top: 1rem;">
-                    <strong>Ingredients:</strong>
-                    ${recipe.ingredients.map(ing => `<div class="recipe-ingredient"><span class="ingredient-name">${ing[0]}</span><span class="ingredient-amount">x${ing[1]}</span></div>`).join('')}
+                    <strong>Ingredients Consumed:</strong>
+                    ${recipe.ingredients.map(ing => `<div class="recipe-ingredient"><span class="ingredient-name">${ing[0]}</span><span class="ingredient-amount">${(ing[1] * rate).toFixed(4)} units/min</span></div>`).join('')}
                 </div>
             </div>
         `;
     });
     
-    recipesOutput.innerHTML = html;
-}
-
-function displayItemFlow(results) {
-    let html = `
-        <h3>Resource Summary</h3>
-        <table class="item-table">
-            <thead>
-                <tr>
-                    <th>Resource</th>
-                    <th>Production/min</th>
-                    <th>Belts Required</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-
-    allResources.forEach(resource => {
-        const production = results.resourceProductionRates[resource];
-        const belts = production.divide(BELT_CAPACITY);
-        html += `
-            <tr>
-                <td>${resource}</td>
-                <td>${production.toFloat().toFixed(4)}</td>
-                <td>${belts.toFloat().toFixed(2)}</td>
-            </tr>
-        `;
-    });
-
-    html += `
-            </tbody>
-        </table>
-    `;
+    if (sortedRecipes.length === 0) {
+        html += '<p style="color: var(--text-secondary); margin-top: 1rem;">No active recipes in optimal solution.</p>';
+    }
     
-    itemsOutput.innerHTML = html;
+    recipesOutput.innerHTML = html;
 }
 
 // Event listeners
