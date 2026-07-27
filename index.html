@@ -1,71 +1,88 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Calc — Resource Production Demo</title>
-  <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 20px; max-width: 900px; margin: auto; }
-    input[type="number"] { width: 80px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #f4f4f4; }
-    .controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
-    .controls > div { min-width: 220px; }
-    button { padding: 8px 12px; }
-    pre { background:#f9f9f9; padding:12px; overflow:auto; white-space:pre-wrap; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Calculator</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>Calc — Resource Production Demo</h1>
-  <p>This is a small client-side demo that computes resource production rates from your inputs and runs an LP optimizer in your browser. No server or install is required — open this page from any device and it runs locally in your browser.</p>
+    <div class="container">
+        <header>
+            <h1>🏭 Recipe Calculator</h1>
+            <p class="subtitle">Optimize your factory production</p>
+        </header>
 
-  <div class="controls">
-    <div>
-      <label>World type:
-        <select id="worldType">
-          <option value="gen2">gen2 (default sample)</option>
-          <option value="default">default</option>
-          <option value="auto">auto (preset)</option>
-        </select>
-      </label>
+        <main>
+            <!-- Input Section -->
+            <section class="input-section">
+                <h2>Configuration</h2>
+                
+                <div class="form-group">
+                    <label for="worldType">World Type:</label>
+                    <select id="worldType">
+                        <option value="default">Default World</option>
+                        <option value="gen2">Gen2 World</option>
+                        <option value="auto">Auto (Preset Max)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="extractorLevel">Extractor Level:</label>
+                    <select id="extractorLevel">
+                        <option value="1">Level 1</option>
+                        <option value="2">Level 2</option>
+                        <option value="3">Level 3</option>
+                        <option value="4">Level 4</option>
+                        <option value="5" selected>Level 5</option>
+                    </select>
+                </div>
+
+                <div class="resource-inputs">
+                    <h3>Resource Node Configuration</h3>
+                    <div id="nodeCountsContainer"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="nuclearPlants">Nuclear Power Plants:</label>
+                    <input type="number" id="nuclearPlants" min="0" value="50">
+                </div>
+
+                <button class="calculate-btn" id="calculateBtn">Calculate Production</button>
+                <button class="reset-btn" id="resetBtn">Reset to Defaults</button>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <h2>Results</h2>
+                
+                <div class="result-tabs">
+                    <button class="tab-btn active" data-tab="resources">Raw Resources</button>
+                    <button class="tab-btn" data-tab="recipes">Recipes</button>
+                    <button class="tab-btn" data-tab="items">Item Flow</button>
+                </div>
+
+                <div class="tab-content">
+                    <div id="resources" class="tab active">
+                        <div id="resourcesOutput"></div>
+                    </div>
+                    <div id="recipes" class="tab">
+                        <div id="recipesOutput"></div>
+                    </div>
+                    <div id="items" class="tab">
+                        <div id="itemsOutput"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Error Section -->
+            <section id="errorSection" class="error-section" style="display: none;">
+                <p id="errorMessage"></p>
+            </section>
+        </main>
     </div>
 
-    <div>
-      <label>Extractor level:
-        <select id="extractorLevel">
-          <option>1</option>
-          <option>2</option>
-          <option>3</option>
-          <option>4</option>
-          <option selected>5</option>
-        </select>
-      </label>
-    </div>
-
-    <div>
-      <button id="useAuto">Load Auto Sample</button>
-    </div>
-
-    <div>
-      <button id="computeBtn">Compute Production & Optimize</button>
-    </div>
-  </div>
-
-  <div id="nodesArea">
-    <h3>Node counts (edit and click Compute)</h3>
-    <div id="nodeInputs"></div>
-  </div>
-
-  <h3>Results</h3>
-  <div id="results"></div>
-
-  <hr />
-  <p>Notes: when prompted for the number of Nuclear Power Plants, leave blank to use the sample value.</p>
-
-  <!-- LP solver library (loaded from CDN) -->
-  <script src="https://unpkg.com/javascript-lp-solver@0.4.24/dist/solver.js"></script>
-  <!-- App script -->
-  <script src="main.js"></script>
+    <script src="calculator.js"></script>
+    <script src="ui.js"></script>
 </body>
 </html>
