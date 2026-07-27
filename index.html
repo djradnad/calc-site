@@ -18,34 +18,27 @@
             <section class="input-section">
                 <h2>Configuration</h2>
                 
-                <div class="form-group">
-                    <label for="worldType">World Type:</label>
-                    <select id="worldType">
-                        <option value="default">Default World</option>
-                        <option value="gen2">Gen2 World</option>
-                        <option value="auto">Auto (Preset Max)</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="extractorLevel">Extractor Level:</label>
-                    <select id="extractorLevel">
-                        <option value="1">Level 1</option>
-                        <option value="2">Level 2</option>
-                        <option value="3">Level 3</option>
-                        <option value="4">Level 4</option>
-                        <option value="5" selected>Level 5</option>
-                    </select>
+                <div class="locked-settings">
+                    <div class="locked-item">
+                        <span class="locked-label">World Type:</span>
+                        <span class="locked-value">Gen2 World</span>
+                    </div>
+                    <div class="locked-item">
+                        <span class="locked-label">Extractor Level:</span>
+                        <span class="locked-value">Level 5</span>
+                    </div>
                 </div>
 
                 <div class="resource-inputs">
                     <h3>Resource Node Configuration</h3>
+                    <p class="resource-hint">Adjust node counts below (production will auto-calculate)</p>
                     <div id="nodeCountsContainer"></div>
                 </div>
 
                 <div class="form-group">
                     <label for="nuclearPlants">Nuclear Power Plants:</label>
                     <input type="number" id="nuclearPlants" min="0" value="50">
+                    <p class="input-hint">Consumes 1 Nuclear Fuel Cell every 2 minutes per plant</p>
                 </div>
 
                 <button class="calculate-btn" id="calculateBtn">Calculate Production</button>

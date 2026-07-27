@@ -1,8 +1,17 @@
 const calculator = new RecipeCalculator();
 
+// Resource max limits
+const RESOURCE_MAX_LIMITS = {
+    'Wood Log': 178,
+    'Coal': 178,
+    'Iron Ore': 178,
+    'Copper Ore': 150,
+    'Stone': 150,
+    'Wolframite': 98,
+    'Uranium Ore': 40
+};
+
 // DOM Elements
-const worldTypeSelect = document.getElementById('worldType');
-const extractorLevelSelect = document.getElementById('extractorLevel');
 const nodeCountsContainer = document.getElementById('nodeCountsContainer');
 const nuclearPlantsInput = document.getElementById('nuclearPlants');
 const calculateBtn = document.getElementById('calculateBtn');
@@ -24,19 +33,34 @@ function initializeUI() {
 function renderResourceInputs() {
     nodeCountsContainer.innerHTML = '';
     allResources.forEach(resource => {
+        const maxLimit = RESOURCE_MAX_LIMITS[resource] || 100;
         const group = document.createElement('div');
         group.className = 'resource-input-group';
         group.innerHTML = `
             <label for="nodes_${resource}">${resource}:</label>
-            <input type="number" id="nodes_${resource}" min="0" value="0">
+            <input type="number" id="nodes_${resource}" min="0" max="${maxLimit}" value="0">
+            <div class="input-max">Max: ${maxLimit}</div>
         `;
         nodeCountsContainer.appendChild(group);
+
+        // Add validation listener
+        const input = group.querySelector('input');
+        input.addEventListener('change', (e) => {
+            const value = parseInt(e.target.value) || 0;
+            if (value > maxLimit) {
+                e.target.value = maxLimit;
+            }
+        });
+        input.addEventListener('blur', (e) => {
+            const value = parseInt(e.target.value) || 0;
+            if (value > maxLimit) {
+                e.target.value = maxLimit;
+            }
+        });
     });
 }
 
 function populateInputs() {
-    worldTypeSelect.value = calculator.worldType;
-    extractorLevelSelect.value = calculator.extractorLevel;
     nuclearPlantsInput.value = calculator.numNuclearPlants.toFloat();
 
     allResources.forEach(resource => {
@@ -48,13 +72,21 @@ function populateInputs() {
 }
 
 function updateFromUI() {
-    calculator.worldType = worldTypeSelect.value;
-    calculator.extractorLevel = parseInt(extractorLevelSelect.value);
+    // Nuclear plants
     calculator.numNuclearPlants = new Fraction(parseInt(nuclearPlantsInput.value) || 0);
 
+    // Node counts with validation
     allResources.forEach(resource => {
         const input = document.getElementById(`nodes_${resource}`);
-        const value = parseInt(input.value) || 0;
+        const maxLimit = RESOURCE_MAX_LIMITS[resource];
+        let value = parseInt(input.value) || 0;
+        
+        // Enforce max limit
+        if (value > maxLimit) {
+            value = maxLimit;
+            input.value = maxLimit;
+        }
+        
         calculator.nodeCounts[resource] = new Fraction(value);
         calculator.nuclearBoostedCounts[resource] = new Fraction(value);
         calculator.coalBoostedCounts[resource] = new Fraction(0);

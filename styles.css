@@ -77,6 +77,37 @@ section h3 {
     font-size: 1.3rem;
 }
 
+.locked-settings {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.locked-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.locked-item:last-child {
+    border-bottom: none;
+}
+
+.locked-label {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.locked-value {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
 .form-group {
     margin-bottom: 1.5rem;
 }
@@ -86,6 +117,19 @@ label {
     margin-bottom: 0.5rem;
     color: var(--text-secondary);
     font-weight: 600;
+}
+
+.input-hint {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 0.3rem;
+    font-style: italic;
+}
+
+.resource-hint {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
 }
 
 select, input[type="number"] {
@@ -127,6 +171,13 @@ select:focus, input[type="number"]:focus {
 .resource-input-group label {
     margin-bottom: 0.3rem;
     font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.resource-input-group .input-max {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.2rem;
 }
 
 .resource-input-group input {
