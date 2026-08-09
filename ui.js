@@ -1,16 +1,5 @@
+// Loader-aware UI and GLPK readiness handling
 const calculator = new RecipeCalculator();
-const GLPK_AVAILABLE = typeof window.glpk !== 'undefined';
-
-// Resource max limits
-const RESOURCE_MAX_LIMITS = {
-    'Wood Log': 178,
-    'Coal': 178,
-    'Iron Ore': 178,
-    'Copper Ore': 150,
-    'Stone': 150,
-    'Wolframite': 98,
-    'Uranium Ore': 40
-};
 
 // DOM Elements
 const nodeCountsContainer = document.getElementById('nodeCountsContainer');
@@ -24,6 +13,17 @@ const errorMessage = document.getElementById('errorMessage');
 const resourcesOutput = document.getElementById('resourcesOutput');
 const recipesOutput = document.getElementById('recipesOutput');
 const tabButtons = document.querySelectorAll('.tab-btn');
+
+// Resource max limits
+const RESOURCE_MAX_LIMITS = {
+    'Wood Log': 178,
+    'Coal': 178,
+    'Iron Ore': 178,
+    'Copper Ore': 150,
+    'Stone': 150,
+    'Wolframite': 98,
+    'Uranium Ore': 40
+};
 
 function initializeUI() {
     calculator.setDefaults();
@@ -94,21 +94,44 @@ function updateFromUI() {
     });
 }
 
+// Ensure GLPK is ready (loader sets window.__glpkReady)
+async function ensureGLPKReady() {
+    try {
+        if (window.__glpkReady) {
+            await window.__glpkReady;
+            return !!window.glpk;
+        }
+        // If no loader, check direct presence
+        return !!window.glpk;
+    } catch (e) {
+        console.warn('GLPK loader failed:', e);
+        return false;
+    }
+}
+
 async function handleCalculate() {
     try {
-        if (!GLPK_AVAILABLE) {
-            showError('GLPK library not loaded. Please refresh the page.');
+        // Wait for GLPK to be available (loader will try local first then CDNs)
+        loadingSection.style.display = 'block';
+        resultsSection.style.display = 'none';
+        errorSection.style.display = 'none';
+
+        const ready = await ensureGLPKReady();
+        loadingSection.style.display = 'none';
+
+        if (!ready) {
+            showError('GLPK library not available. Please check network/CSP or try again later.');
             return;
         }
-        
+
         updateFromUI();
         calculator.calculateResourceProduction();
-        
-        // Show loading
+
+        // Show loading while solver runs
         resultsSection.style.display = 'none';
         errorSection.style.display = 'none';
         loadingSection.style.display = 'block';
-        
+
         // Solve LP
         const rawResList = ['Wood Log', 'Coal', 'Iron Ore', 'Copper Ore', 'Stone', 'Wolframite', 'Uranium Ore'];
         const nuclearFuelDemand = calculator.numNuclearPlants.toFloat() * 0.5; // 1 fuel cell every 2 minutes
@@ -141,7 +164,7 @@ async function handleCalculate() {
         }
     } catch (error) {
         loadingSection.style.display = 'none';
-        showError(error.message);
+        showError(error.message || String(error));
     }
 }
 
