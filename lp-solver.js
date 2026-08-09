@@ -1,4 +1,4 @@
-// LP Solver implementation using glpk.js
+// LP Solver implementation using glpk.js (model API)
 
 class LPSolver {
     constructor(recipesLib, rawResList, resourceProdRates, nuclearFuelDemand) {
@@ -9,157 +9,152 @@ class LPSolver {
         this.glpk = window.glpk;
     }
 
-    // Build the LP problem
-    buildProblem() {
-        // Collect all unique items
-        const allItems = new Set();
-        this.recipes.forEach(recipe => {
-            allItems.add(recipe.item);
-            recipe.ingredients.forEach(ing => allItems.add(ing[0]));
-        });
-        this.rawResList.forEach(res => allItems.add(res));
-        
-        this.allItems = Array.from(allItems).sort();
-        this.itemToIdx = {};
-        this.allItems.forEach((item, idx) => {
-            this.itemToIdx[item] = idx;
-        });
+    // Build a model object compatible with glpk.solve(model, options)
+    buildModel() {
+        const model = {
+            name: 'recipe_lp',
+            objective: {
+                direction: this.glpk.GLP_MAX,
+                name: 'obj',
+                vars: []
+            },
+            subjectTo: [],
+            bounds: []
+        };
 
         const numRecipes = this.recipes.length;
-        const numItems = this.allItems.length;
-        const numRawRes = this.rawResList.length;
 
-        // Build glpk problem
-        const mip = new this.glpk.Problem();
-        mip.setDirection(this.glpk.GLP_MAX); // Maximize
-
-        // Variables: one for each recipe
+        // Create a variable name for each recipe: recipe_0, recipe_1, ...
         for (let i = 0; i < numRecipes; i++) {
-            mip.addRows(1);
-            mip.addCols(1);
-            mip.setColName(i + 1, `recipe_${i}`);
-            mip.setColKind(i + 1, this.glpk.GLP_CV); // Continuous variable
-            mip.setColBnds(i + 1, this.glpk.GLP_LO, 0, 0); // x >= 0
+            const varName = `recipe_${i}`;
+
+            // Non-negative variable
+            model.bounds.push({ name: varName, type: this.glpk.GLP_LO, lb: 0 });
+
+            // Objective coefficient: only Earth Token recipe(s) contribute
+            const recipe = this.recipes[i];
+            const coef = (recipe.item === 'Earth Token') ? recipe.amount : 0;
+            model.objective.vars.push({ name: varName, coef });
         }
 
-        // Objective: maximize Earth Token production (recipe index for "Earth Token")
-        const earthTokenIdx = this.recipes.findIndex(r => r.item === 'Earth Token');
-        if (earthTokenIdx >= 0) {
-            mip.setRowName(1, 'obj');
-            const earthCoeffs = new Array(numRecipes + 1).fill(0);
-            earthCoeffs[earthTokenIdx + 1] = this.recipes[earthTokenIdx].amount;
-            mip.setMatRow(1, earthCoeffs);
-        }
-
-        // Constraint 1: Raw resource limits (inequality constraints)
-        let constraintIdx = 2;
+        // 1) Raw resource constraints (upper bounds on consumption)
         this.rawResList.forEach(res => {
-            mip.addRows(1);
-            const coeffs = new Array(numRecipes + 1).fill(0);
-            
-            // For each recipe that uses this resource
+            const vars = [];
             this.recipes.forEach((recipe, recipeIdx) => {
                 recipe.ingredients.forEach(ing => {
                     if (ing[0] === res) {
-                        coeffs[recipeIdx + 1] = ing[1];
+                        vars.push({ name: `recipe_${recipeIdx}`, coef: ing[1] });
                     }
                 });
             });
-            
-            mip.setRowName(constraintIdx, `resource_${res}`);
-            mip.setRowBnds(constraintIdx, this.glpk.GLP_UP, 0, this.resourceProdRates[res] || 0);
-            mip.setMatRow(constraintIdx, coeffs);
-            constraintIdx++;
+
+            model.subjectTo.push({
+                name: `resource_${res}`,
+                vars,
+                bnds: { type: this.glpk.GLP_UP, ub: Number(this.resourceProdRates[res] || 0) }
+            });
         });
 
-        // Constraint 2: Material balance (equality constraints)
-        this.allItems.forEach(item => {
+        // 2) Material balance constraints (equalities) for intermediate items
+        // Collect all items (produced + ingredients)
+        const allItems = new Set();
+        this.recipes.forEach(r => {
+            allItems.add(r.item);
+            r.ingredients.forEach(ing => allItems.add(ing[0]));
+        });
+        this.rawResList.forEach(r => allItems.add(r));
+
+        allItems.forEach(item => {
             if (!this.rawResList.includes(item) && item !== 'Earth Token') {
-                mip.addRows(1);
-                const coeffs = new Array(numRecipes + 1).fill(0);
-                
+                const vars = [];
+
                 this.recipes.forEach((recipe, recipeIdx) => {
-                    // Production: positive
+                    // production = positive
                     if (recipe.item === item) {
-                        coeffs[recipeIdx + 1] += recipe.amount;
+                        vars.push({ name: `recipe_${recipeIdx}`, coef: recipe.amount });
                     }
-                    
-                    // Consumption: negative
+                    // consumption = negative
                     recipe.ingredients.forEach(ing => {
                         if (ing[0] === item) {
-                            coeffs[recipeIdx + 1] -= ing[1];
+                            vars.push({ name: `recipe_${recipeIdx}`, coef: -ing[1] });
                         }
                     });
                 });
-                
-                mip.setRowName(constraintIdx, `balance_${item}`);
-                let bound = item === 'Nuclear Fuel Cell' ? this.nuclearFuelDemand : 0;
-                mip.setRowBnds(constraintIdx, this.glpk.GLP_FX, bound, bound);
-                mip.setMatRow(constraintIdx, coeffs);
-                constraintIdx++;
+
+                const boundValue = (item === 'Nuclear Fuel Cell') ? Number(this.nuclearFuelDemand || 0) : 0;
+                model.subjectTo.push({
+                    name: `balance_${item}`,
+                    vars,
+                    bnds: { type: this.glpk.GLP_FX, lb: boundValue, ub: boundValue }
+                });
             }
         });
 
-        return mip;
+        return model;
     }
 
-    // Solve the LP problem
+    // Solve the LP problem using glpk.solve
     async solve() {
         try {
-            const mip = this.buildProblem();
-            
-            // Solve
-            const options = {
-                msglev: this.glpk.GLP_MSG_OFF,
-                presolve: this.glpk.GLP_ON
-            };
-            
-            const result = await this.glpk.simplex(mip, options);
-            
-            if (result.status === this.glpk.GLP_OPT) {
-                // Extract solution
+            if (!this.glpk || typeof this.glpk.solve !== 'function') {
+                return { success: false, message: 'GLPK not available or incompatible build loaded.' };
+            }
+
+            const model = this.buildModel();
+            const options = { msgLevel: this.glpk.GLP_MSG_OFF };
+
+            // glpk.solve is synchronous in many builds; wrap in Promise for consistency
+            const out = await new Promise((resolve) => {
+                const result = this.glpk.solve(model, options);
+                resolve(result);
+            });
+
+            // result shape varies between builds; try to access result.result or result
+            const sol = out.result || out;
+
+            const status = sol.status !== undefined ? sol.status : (sol.hasOwnProperty('z') ? this.glpk.GLP_OPT : null);
+
+            if (status === this.glpk.GLP_OPT || sol.status === this.glpk.GLP_OPT) {
+                // Extract variable values
+                const vars = sol.vars || sol.columns || {};
+
                 const solution = {};
-                const numRecipes = this.recipes.length;
-                
-                for (let i = 0; i < numRecipes; i++) {
-                    const rate = mip.mipColVal(i + 1);
-                    if (rate > 1e-9) {
-                        solution[this.recipes[i].name] = rate;
+                for (let i = 0; i < this.recipes.length; i++) {
+                    const varName = `recipe_${i}`;
+                    const val = (vars[varName] !== undefined) ? Number(vars[varName]) : 0;
+                    if (val > 1e-12) {
+                        solution[this.recipes[i].name] = val;
                     }
                 }
-                
+
                 // Calculate resource consumption
                 const resourceConsumption = {};
-                this.rawResList.forEach(res => {
-                    resourceConsumption[res] = 0;
-                });
-                
+                this.rawResList.forEach(res => resourceConsumption[res] = 0);
+
                 Object.entries(solution).forEach(([recipeName, rate]) => {
                     const recipe = this.recipes.find(r => r.name === recipeName);
+                    if (!recipe) return;
                     recipe.ingredients.forEach(ing => {
                         if (resourceConsumption.hasOwnProperty(ing[0])) {
                             resourceConsumption[ing[0]] += ing[1] * rate;
                         }
                     });
                 });
-                
+
+                // Objective value
+                const earthTokens = sol.z !== undefined ? sol.z : (out.z !== undefined ? out.z : null);
+
                 return {
                     success: true,
                     optimalRecipeRates: solution,
-                    resourceConsumption: resourceConsumption,
-                    earthTokens: mip.mipObjVal()
+                    resourceConsumption,
+                    earthTokens
                 };
             } else {
-                return {
-                    success: false,
-                    message: `LP solve failed with status: ${result.status}`
-                };
+                return { success: false, message: `LP solve failed with status: ${sol.status}` };
             }
         } catch (error) {
-            return {
-                success: false,
-                message: `Error solving LP: ${error.message}`
-            };
+            return { success: false, message: `Error solving LP: ${error.message}` };
         }
     }
 }
