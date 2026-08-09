@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recipe Calculator</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/glpk.js/4.65/glpk.min.js"></script>
+    <!-- Removed direct CDN glpk include; using glpk-loader.js to handle local/cdn fallback -->
 </head>
 <body>
     <div class="container">
@@ -78,6 +78,8 @@
         </main>
     </div>
 
+    <!-- Loader tries local vendor first, then CDNs. Provides window.__glpkReady promise. -->
+    <script src="glpk-loader.js"></script>
     <script src="calculator.js"></script>
     <script src="lp-solver.js"></script>
     <script src="ui.js"></script>
