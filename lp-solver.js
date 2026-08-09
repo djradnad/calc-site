@@ -101,6 +101,10 @@ class LPSolver {
             }
 
             const model = this.buildModel();
+
+            // LOG: dump model to console for debugging
+            try { console.debug('LP model built:', model); } catch (e) {}
+
             const options = { msgLevel: this.glpk.GLP_MSG_OFF };
 
             // glpk.solve is synchronous in many builds; wrap in Promise for consistency
@@ -108,6 +112,9 @@ class LPSolver {
                 const result = this.glpk.solve(model, options);
                 resolve(result);
             });
+
+            // LOG: raw solver output
+            try { console.debug('GLPK raw output:', out); } catch (e) {}
 
             // result shape varies between builds; try to access result.result or result
             const sol = out.result || out;
