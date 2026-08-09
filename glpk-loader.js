@@ -1,4 +1,4 @@
-// glpk-loader.js — loads glpk from local vendor first, then CDNs with fallback and exposes window.__glpkReady promise
+// glpk-loader.js — loads glpk from CDNs with fallback and exposes window.__glpkReady promise
 (function(){
   if (window.__glpkReady) return; // already installed
 
@@ -19,8 +19,11 @@
       });
     }
 
+    // Candidate sources tried in order. Prefer local vendored copies (relative paths)
+    // so GitHub Pages serves them from the repo subfolder (./), then fall back to CDNs.
     const candidates = [
-      '/glpk.min.js',
+      './glpk.min.js',                    // local file next to index.html (preferred if vendored)
+      './vendor/glpk.min.js',             // alternative local vendor path
       'https://cdnjs.cloudflare.com/ajax/libs/glpk.js/4.0.1/glpk.min.js',
       'https://cdn.jsdelivr.net/npm/glpk.js@4.0.1/dist/glpk.min.js'
     ];
@@ -38,6 +41,6 @@
       }
     }
 
-    throw new Error('Could not load glpk from local path or CDNs');
+    throw new Error('Could not load glpk from CDNs or local vendor');
   })();
 })();
